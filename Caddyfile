@@ -1,0 +1,13 @@
+:3000 {
+    root * /srv
+    encode gzip zstd
+    file_server
+
+    header {
+        Cross-Origin-Embedder-Policy "credentialless"
+        Cross-Origin-Opener-Policy "same-origin-allow-popups"
+        Cross-Origin-Resource-Policy "cross-origin"
+        Content-Security-Policy "frame-ancestors 'self' https://app.nodaro.ai https://next.nodaro.ai http://localhost:* https://*.up.railway.app"
+        X-Frame-Options ""
+    }
+}
