@@ -126,6 +126,39 @@
 		var data = event.data;
 		if (!data || !data.type) return;
 
+		// On-demand state snapshot. The editor is cross-origin to the platform,
+		// so when it misbehaves inside the iframe there is otherwise no way to
+		// see what it looks like from the outside.
+		if (data.type === 'NODARO_DIAGNOSTICS') {
+			var snap = {};
+			try {
+				var ed = window.PKAudioEditor;
+				var wsd = ed && ed.engine && ed.engine.wavesurfer;
+				var app = document.getElementById('app');
+				var cvs = document.getElementsByTagName('canvas');
+				snap = {
+					readyState: document.readyState,
+					appChildren: app ? app.children.length : -1,
+					innerWH: window.innerWidth + 'x' + window.innerHeight,
+					duration: wsd && wsd.getDuration ? wsd.getDuration() : null,
+					wsHeight: wsd && wsd.params ? wsd.params.height : null,
+					canvasCount: cvs.length,
+					canvasSizes: Array.prototype.slice.call(cvs, 0, 4).map(function(c) {
+						var r = c.getBoundingClientRect();
+						return c.width + 'x' + c.height + '@' + Math.round(r.width) + 'x' + Math.round(r.height);
+					}),
+					acState: wsd && wsd.backend && wsd.backend.ac ? wsd.backend.ac.state : null,
+					isReady: ed && ed.engine ? ed.engine.is_ready : null,
+					activeOverlays: Array.prototype.filter.call(document.querySelectorAll('*'), function(e) {
+						return String(e.className || '').indexOf('pk_act') !== -1;
+					}).map(function(e) { return e.className; }),
+					bodyText: (document.body.innerText || '').slice(0, 120)
+				};
+			} catch (e) { snap = { snapshotError: String(e && e.message) }; }
+			window.parent.postMessage({ type: 'AUDIOMASS_DIAGNOSTICS', payload: snap }, parentOrigin || event.origin);
+			return;
+		}
+
 		if (data.type === 'NODARO_LOAD_AUDIO') {
 			var payload = data.payload || {};
 			if (payload.audioBuffer) {
