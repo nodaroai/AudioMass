@@ -9,5 +9,18 @@
         Cross-Origin-Resource-Policy "cross-origin"
         Content-Security-Policy "frame-ancestors 'self' https://app.nodaro.ai https://next.nodaro.ai http://localhost:* https://*.up.railway.app"
         X-Frame-Options ""
+
+        # AudioMass ships unhashed filenames (app.js, engine.js, ...), so any
+        # shared cache that keeps them across a deploy will pair a fresh
+        # index.html with stale modules. Cloudflare fronts Railway and applies a
+        # 4h default TTL to .js/.css when the origin says nothing -- which is
+        # exactly what happened on the 2026-07-28 upstream bump: multitrack.js
+        # and amss-format.js loaded fresh against a cached old app.js and
+        # silently failed to register.
+        #
+        # no-cache still lets caches STORE the response, it just forces
+        # revalidation, so repeat loads stay cheap 304s. Do not swap this for a
+        # max-age until the filenames carry content hashes.
+        Cache-Control "no-cache"
     }
 }
