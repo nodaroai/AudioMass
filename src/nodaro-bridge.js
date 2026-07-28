@@ -56,48 +56,48 @@
 	// use it to guarantee the loader comes down. Firing DidDownloadFile twice is
 	// harmless; ui.js just removes a class.
 	// The parent creates the iframe and posts audio as soon as we say READY, which
-	// is routinely before the browser has laid the iframe out -- window.innerWidth
-	// is still 0 at that point. wavesurfer sizes its canvas from the container, so
-	// it draws the waveform 0px wide and the editor looks empty even though the
-	// audio decoded fine.
+	// is routinely before the browser has laid the iframe out -- a diagnostics
+	// snapshot taken at that moment reports window.innerWidth 0 with the editor
+	// already built.
 	//
-	// The drawer caches that zero in drawer.width, and because AudioMass runs
-	// wavesurfer with fillParent/scrollParent off, the wrapper keeps an explicit
-	// 0px width forever after. Nothing recovers it on its own: RequestResize only
-	// calls setHeight, drawBuffer() re-reads the cached width, and even a fresh
-	// loadBlob draws into the same poisoned drawer. drawer.setWidth() is the one
-	// call that re-measures -- it early-returns unless the value actually changes,
-	// so feed it the container's real width and then redraw.
+	// AudioMass ships a modified wavesurfer whose drawer.getWidth() returns a
+	// cached drawer._width -- the live `container.clientWidth * pixelRatio`
+	// measurement is commented out. _width is only ever recomputed inside the
+	// drawer's own 'resize' handler, so once it is captured as 0 every later
+	// drawBuffer() draws a 0px-wide waveform, and neither RequestResize (height
+	// only) nor a fresh loadBlob repairs it. Recovering takes all four steps, in
+	// this order -- doing any of them alone leaves the editor blank:
+	//
+	//   1. ws.fireEvent('resize')  -> drawer recomputes _width and _bbox
+	//   2. drawer.setWidth(_width) -> drawer.width, wrapper style and canvas size
+	//   3. RequestResize           -> height, via AudioMass' mainHeight()
+	//   4. ws.drawBuffer()         -> finally paint at the corrected width
 	function redraw(editor) {
 		if (!editor || !editor.engine) return;
 		var ws = editor.engine.wavesurfer;
 		var dr = ws && ws.drawer;
-		if (!dr || !dr.container) return;
+		// No container width yet means layout still is not settled; leave the
+		// state alone so a later pass can do the job properly.
+		if (!dr || !dr.container || !dr.container.clientWidth) return false;
 		try {
-			var want = dr.container.clientWidth * (ws.params && ws.params.pixelRatio || 1);
-			if (want > 0 && dr.width !== want && dr.setWidth) dr.setWidth(want);
-			if (dr.updateSize) dr.updateSize();
+			ws.fireEvent('resize');
+			if (dr._width > 0 && dr.width !== dr._width && dr.setWidth) dr.setWidth(dr._width);
+			editor.fireEvent('RequestResize');
+			if (ws.drawBuffer) ws.drawBuffer();
 		} catch(e) {}
-
-		// Fixing the width alone leaves the waveform sized but unpainted: the
-		// repaint only happens when setHeight sees a *changed* height, and
-		// RequestResize on its own re-uses the height it already has. Dispatching
-		// a real resize event runs AudioMass' own handler, which re-derives
-		// mainHeight() from the now-correct layout and repaints. Nothing here
-		// listens for resize, so this cannot feed back on itself.
-		try { window.dispatchEvent(new Event('resize')); } catch(e) {}
+		return true;
 	}
 
 	function redrawWhenLaidOut(editor) {
 		var tries = 0;
 		(function settle() {
-			// Bail out after ~2s of frames so a genuinely hidden iframe cannot
+			// Bail out after ~4s of frames so a genuinely hidden iframe cannot
 			// spin here forever.
-			if (window.innerWidth > 0 || ++tries > 120) { redraw(editor); return; }
+			if (redraw(editor) || ++tries > 240) return;
 			requestAnimationFrame(settle);
 		})();
-		// Second pass for layout that settles after the first paint.
-		setTimeout(function() { redraw(editor); }, 350);
+		// Second pass for layout that only settles after the first paint.
+		setTimeout(function() { redraw(editor); }, 400);
 	}
 
 	var readyGuardInstalled = false;
