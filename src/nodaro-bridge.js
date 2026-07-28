@@ -45,10 +45,30 @@
 		}
 	}
 
+	// WillDownloadFile raises an opaque full-screen loader (ui.js) that is only
+	// taken down by DidDownloadFile. engine.js fires DidDownloadFile from its
+	// wavesurfer 'ready' handler, but behind an `if (q.is_ready) return` guard --
+	// so clearing is_ready before loading, as we do below, is a race against the
+	// app's own initialisation. Lose it and the loader never lifts: the editor
+	// renders as a blank sheet even though the audio decoded fine.
+	//
+	// DidReadyFire is fired unconditionally at the top of that same handler, so
+	// use it to guarantee the loader comes down. Firing DidDownloadFile twice is
+	// harmless; ui.js just removes a class.
+	var readyGuardInstalled = false;
+	function installLoaderGuard(editor) {
+		if (readyGuardInstalled) return;
+		readyGuardInstalled = true;
+		editor.listenFor('DidReadyFire', function() {
+			editor.fireEvent('DidDownloadFile');
+		});
+	}
+
 	function loadAudioBlob(blob) {
 		waitForEngine(function() {
 			var editor = window.PKAudioEditor;
 			var ws = editor.engine.wavesurfer;
+			installLoaderGuard(editor);
 			// Reset add mode so it opens as new, not appends
 			ws.backend._add = 0;
 			editor.engine.is_ready = false;
