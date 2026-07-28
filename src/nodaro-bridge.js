@@ -61,6 +61,15 @@
 		readyGuardInstalled = true;
 		editor.listenFor('DidReadyFire', function() {
 			editor.fireEvent('DidDownloadFile');
+
+			// The editor sizes its canvas from the iframe's layout. A
+			// parent-driven load arrives within ~100ms of the engine existing,
+			// which on a real network is well before that layout settles -- the
+			// waveform then gets drawn into a canvas barely tens of pixels tall
+			// and the editor reads as empty. RequestResize re-measures and
+			// redraws; it is idempotent, so fire it again once layout is final.
+			editor.fireEvent('RequestResize');
+			setTimeout(function() { editor.fireEvent('RequestResize'); }, 300);
 		});
 	}
 
