@@ -76,9 +76,16 @@
 		try {
 			var want = dr.container.clientWidth * (ws.params && ws.params.pixelRatio || 1);
 			if (want > 0 && dr.width !== want && dr.setWidth) dr.setWidth(want);
+			if (dr.updateSize) dr.updateSize();
 		} catch(e) {}
-		try { editor.fireEvent('RequestResize'); } catch(e) {}
-		try { if (ws.drawBuffer) ws.drawBuffer(); } catch(e) {}
+
+		// Fixing the width alone leaves the waveform sized but unpainted: the
+		// repaint only happens when setHeight sees a *changed* height, and
+		// RequestResize on its own re-uses the height it already has. Dispatching
+		// a real resize event runs AudioMass' own handler, which re-derives
+		// mainHeight() from the now-correct layout and repaints. Nothing here
+		// listens for resize, so this cannot feed back on itself.
+		try { window.dispatchEvent(new Event('resize')); } catch(e) {}
 	}
 
 	function redrawWhenLaidOut(editor) {
@@ -102,16 +109,6 @@
 			editor.fireEvent('DidDownloadFile');
 			redrawWhenLaidOut(editor);
 		});
-
-		// The iframe going from unlaid-out to laid-out does not always surface as
-		// a resize event, so watch the element itself where we can.
-		if (typeof ResizeObserver === 'function') {
-			try {
-				var ro = new ResizeObserver(function() { redraw(window.PKAudioEditor); });
-				ro.observe(document.body);
-			} catch(e) {}
-		}
-		window.addEventListener('resize', function() { redraw(window.PKAudioEditor); });
 	}
 
 	function reportLoadFailure(reason, detail) {
