@@ -64,18 +64,49 @@
 		});
 	}
 
+	function reportLoadFailure(reason, detail) {
+		if (!parentOrigin) return;
+		window.parent.postMessage({
+			type: 'AUDIOMASS_LOAD_ERROR',
+			payload: { reason: reason, detail: String(detail || '') }
+		}, parentOrigin);
+	}
+
 	function loadAudioBlob(blob) {
 		waitForEngine(function() {
 			var editor = window.PKAudioEditor;
 			var ws = editor.engine.wavesurfer;
 			installLoaderGuard(editor);
-			// Reset add mode so it opens as new, not appends
-			ws.backend._add = 0;
-			editor.engine.is_ready = false;
-			editor.fireEvent('WillDownloadFile');
-			ws.loadBlob(blob);
-			editor.fireEvent('DidUnloadFile');
-			if (ws.regions) ws.regions.clear();
+
+			// A cross-origin iframe with no user activation gets a suspended
+			// AudioContext, and wavesurfer's decode never resolves against one --
+			// no 'ready', so the loader would sit there forever. Resume first.
+			try {
+				var ac = ws.backend && ws.backend.ac;
+				if (ac && ac.state === 'suspended' && ac.resume) ac.resume();
+			} catch(e) {}
+
+			// Nothing below may throw silently: a failure here leaves the editor
+			// showing the loading overlay with no audio, which reads as "the
+			// editor opened blank". Tell the parent instead.
+			var settled = false;
+			editor.listenFor('DidReadyFire', function() { settled = true; });
+			setTimeout(function() {
+				if (!settled) reportLoadFailure('decode-timeout', ws.backend && ws.backend.ac && ws.backend.ac.state);
+			}, 20000);
+
+			try {
+				// Reset add mode so it opens as new, not appends
+				ws.backend._add = 0;
+				editor.engine.is_ready = false;
+				editor.fireEvent('WillDownloadFile');
+				ws.loadBlob(blob);
+				editor.fireEvent('DidUnloadFile');
+				if (ws.regions) ws.regions.clear();
+			} catch (err) {
+				editor.fireEvent('DidDownloadFile');
+				reportLoadFailure('exception', err && err.message);
+			}
 		});
 	}
 
