@@ -55,22 +55,54 @@
 	// DidReadyFire is fired unconditionally at the top of that same handler, so
 	// use it to guarantee the loader comes down. Firing DidDownloadFile twice is
 	// harmless; ui.js just removes a class.
+	// The parent creates the iframe and posts audio as soon as we say READY, which
+	// is routinely before the browser has laid the iframe out -- window.innerWidth
+	// is still 0 at that point. wavesurfer sizes its canvas from the container, so
+	// it draws the waveform 0px wide and the editor looks empty even though the
+	// audio decoded fine.
+	//
+	// engine.js' RequestResize only calls setHeight, so it recovers the height and
+	// leaves the width at zero. drawBuffer() is what re-derives width from the
+	// container, so do both, and not until the viewport is actually non-zero.
+	function redraw(editor) {
+		if (!editor || !editor.engine) return;
+		var ws = editor.engine.wavesurfer;
+		if (!ws) return;
+		try { editor.fireEvent('RequestResize'); } catch(e) {}
+		try { if (ws.drawBuffer) ws.drawBuffer(); } catch(e) {}
+	}
+
+	function redrawWhenLaidOut(editor) {
+		var tries = 0;
+		(function settle() {
+			// Bail out after ~2s of frames so a genuinely hidden iframe cannot
+			// spin here forever.
+			if (window.innerWidth > 0 || ++tries > 120) { redraw(editor); return; }
+			requestAnimationFrame(settle);
+		})();
+		// Second pass for layout that settles after the first paint.
+		setTimeout(function() { redraw(editor); }, 350);
+	}
+
 	var readyGuardInstalled = false;
 	function installLoaderGuard(editor) {
 		if (readyGuardInstalled) return;
 		readyGuardInstalled = true;
+
 		editor.listenFor('DidReadyFire', function() {
 			editor.fireEvent('DidDownloadFile');
-
-			// The editor sizes its canvas from the iframe's layout. A
-			// parent-driven load arrives within ~100ms of the engine existing,
-			// which on a real network is well before that layout settles -- the
-			// waveform then gets drawn into a canvas barely tens of pixels tall
-			// and the editor reads as empty. RequestResize re-measures and
-			// redraws; it is idempotent, so fire it again once layout is final.
-			editor.fireEvent('RequestResize');
-			setTimeout(function() { editor.fireEvent('RequestResize'); }, 300);
+			redrawWhenLaidOut(editor);
 		});
+
+		// The iframe going from unlaid-out to laid-out does not always surface as
+		// a resize event, so watch the element itself where we can.
+		if (typeof ResizeObserver === 'function') {
+			try {
+				var ro = new ResizeObserver(function() { redraw(window.PKAudioEditor); });
+				ro.observe(document.body);
+			} catch(e) {}
+		}
+		window.addEventListener('resize', function() { redraw(window.PKAudioEditor); });
 	}
 
 	function reportLoadFailure(reason, detail) {
