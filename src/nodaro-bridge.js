@@ -61,13 +61,22 @@
 	// it draws the waveform 0px wide and the editor looks empty even though the
 	// audio decoded fine.
 	//
-	// engine.js' RequestResize only calls setHeight, so it recovers the height and
-	// leaves the width at zero. drawBuffer() is what re-derives width from the
-	// container, so do both, and not until the viewport is actually non-zero.
+	// The drawer caches that zero in drawer.width, and because AudioMass runs
+	// wavesurfer with fillParent/scrollParent off, the wrapper keeps an explicit
+	// 0px width forever after. Nothing recovers it on its own: RequestResize only
+	// calls setHeight, drawBuffer() re-reads the cached width, and even a fresh
+	// loadBlob draws into the same poisoned drawer. drawer.setWidth() is the one
+	// call that re-measures -- it early-returns unless the value actually changes,
+	// so feed it the container's real width and then redraw.
 	function redraw(editor) {
 		if (!editor || !editor.engine) return;
 		var ws = editor.engine.wavesurfer;
-		if (!ws) return;
+		var dr = ws && ws.drawer;
+		if (!dr || !dr.container) return;
+		try {
+			var want = dr.container.clientWidth * (ws.params && ws.params.pixelRatio || 1);
+			if (want > 0 && dr.width !== want && dr.setWidth) dr.setWidth(want);
+		} catch(e) {}
 		try { editor.fireEvent('RequestResize'); } catch(e) {}
 		try { if (ws.drawBuffer) ws.drawBuffer(); } catch(e) {}
 	}
