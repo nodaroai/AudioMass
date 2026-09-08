@@ -8,7 +8,9 @@
 
 	var ALLOWED_ORIGINS = [
 		'https://app.nodaro.ai',
-		'https://next.nodaro.ai'
+		'https://next.nodaro.ai',
+		'https://studio.nodaro.ai',
+		'https://next.studio.nodaro.ai'
 	];
 	var RAILWAY_SUFFIX = '.up.railway.app';
 	var SESSION_MIME = 'application/x-audiomass-session';
