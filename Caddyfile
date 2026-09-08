@@ -7,7 +7,7 @@
         Cross-Origin-Embedder-Policy "credentialless"
         Cross-Origin-Opener-Policy "same-origin-allow-popups"
         Cross-Origin-Resource-Policy "cross-origin"
-        Content-Security-Policy "frame-ancestors 'self' https://app.nodaro.ai https://next.nodaro.ai http://localhost:* https://*.up.railway.app"
+        Content-Security-Policy "frame-ancestors 'self' https://app.nodaro.ai https://next.nodaro.ai https://studio.nodaro.ai https://next.studio.nodaro.ai http://localhost:* https://*.up.railway.app"
         X-Frame-Options ""
 
         # AudioMass ships unhashed filenames (app.js, engine.js, ...), so any
