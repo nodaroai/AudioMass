@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
 const { test } = require('node:test');
 const { runInNewContext } = require('node:vm');
 
@@ -28,7 +29,8 @@ function openBridge(origin) {
 }
 
 for (const origin of ['https://studio.nodaro.ai', 'https://next.studio.nodaro.ai',
-  'https://app.nodaro.ai', 'https://next.nodaro.ai']) {
+  'https://app.nodaro.ai', 'https://next.nodaro.ai',
+  'https://flow.nodaro.ai', 'https://next.flow.nodaro.ai', 'https://next.app.nodaro.ai']) {
   test('accepts editor messages from ' + origin, () => {
     const sent = openBridge(origin);
     assert.equal(sent.length, 1);
@@ -43,3 +45,11 @@ for (const origin of ['https://next.studio.nodaro.ai.evil.example',
     assert.equal(openBridge(origin).length, 0);
   });
 }
+
+test('the Caddyfile lets the same parents frame the editor', () => {
+  const caddyfile = readFileSync(join(__dirname, '..', 'Caddyfile'), 'utf8');
+  for (const origin of ['https://app.nodaro.ai', 'https://next.nodaro.ai', 'https://studio.nodaro.ai', 'https://next.studio.nodaro.ai',
+    'https://flow.nodaro.ai', 'https://next.flow.nodaro.ai', 'https://next.app.nodaro.ai']) {
+    assert.ok(caddyfile.includes(origin + ' ') || caddyfile.includes(origin + '"'), origin + ' is in frame-ancestors');
+  }
+});
